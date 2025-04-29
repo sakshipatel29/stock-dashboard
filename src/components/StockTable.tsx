@@ -7,8 +7,23 @@ interface StockData {
   changePercent: number;
 }
 
-const STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'];
-const API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY;
+const STOCKS = [
+  'AAPL',
+  'MSFT',
+  'GOOGL',
+  'AMZN',
+  'META',
+  'NFLX', 
+  'PEP',
+  'KO',
+  'WMT', 
+  'BA'
+];
+
+
+const API_KEY = process.env.NODE_ENV === 'production'
+  ? process.env.REACT_APP_TWELVE_DATA_API_KEY_PROD
+  : process.env.REACT_APP_TWELVE_DATA_API_KEY_DEV;
 
 const StockTable: React.FC = () => {
   const [stocks, setStocks] = useState<StockData[]>([]);
@@ -22,37 +37,40 @@ const StockTable: React.FC = () => {
     setError(null);
     try {
       const fetchedData: StockData[] = [];
-
+  
       for (const symbol of STOCKS) {
-        const res = await axios.get(`https://www.alphavantage.co/query`, {
+        const res = await axios.get(`https://api.twelvedata.com/quote`, {
           params: {
-            function: 'GLOBAL_QUOTE',
             symbol: symbol,
             apikey: API_KEY,
           },
         });
-
-        const data = res.data['Global Quote'];
-
-        if (!data || Object.keys(data).length === 0) {
-          throw new Error(`No data for symbol: ${symbol}`);
+  
+        const data = res.data;
+  
+        if (!data || data.status === "error") {
+          console.warn(`No data for symbol: ${symbol}`);
+          continue;
         }
-
+  
         fetchedData.push({
-          symbol,
-          price: parseFloat(data['05. price']),
-          changePercent: parseFloat(data['10. change percent'].replace('%', '')),
+          symbol: symbol,
+          price: data.price ? parseFloat(data.price) : (data.close ? parseFloat(data.close) : 0),
+          changePercent: parseFloat(data.percent_change),
         });
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-
+  
       setStocks(fetchedData);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Fetch error:', err.response?.data || err.message || err);
       setError('Failed to fetch stock data');
     } finally {
       setLoading(false);
     }
   };
+  
 
   useEffect(() => {
     fetchStockData();
@@ -70,61 +88,72 @@ const StockTable: React.FC = () => {
   if (error) return <div className="text-center py-10 text-red-500">{error}</div>;
 
   return (
-    <div className="overflow-x-auto p-4 space-y-6">
-      {/* Controls */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-        <input
-          type="text"
-          placeholder="Search stock..."
-          className="border border-gray-300 rounded-md px-4 py-2 w-full md:w-1/3"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <button
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
-            onClick={() => setSortBy('price')}
-          >
-            Sort by Price
-          </button>
-          <button
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md"
-            onClick={() => setSortBy('changePercent')}
-          >
-            Sort by Change %
-          </button>
-          <button
-            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md"
-            onClick={fetchStockData}
-          >
-            Refresh
-          </button>
+    <div className="min-h-screen flex flex-col items-center justify-start bg-gray-100 pt-12 px-4">
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-6 flex items-center gap-2">
+        <span role="img" aria-label="chart">📈</span>
+        <span className="text-gray-800">Stock Price Dashboard</span>
+      </h1>
+  
+      <div className="w-full max-w-4xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <input
+            type="text"
+            placeholder="Search stock..."
+            className="border border-gray-300 rounded-md px-4 py-2 w-full sm:w-1/2"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="flex flex-wrap justify-center gap-2">
+            <button
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
+              onClick={() => setSortBy('price')}
+            >
+              Sort by Price
+            </button>
+            <button
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md"
+              onClick={() => setSortBy('changePercent')}
+            >
+              Sort by Change
+            </button>
+            <button
+              className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md"
+              onClick={fetchStockData}
+              aria-label="Refresh"
+            >
+              <span className={`${loading ? 'animate-spin' : ''}`}>↻</span>
+            </button>
+          </div>
+        </div>
+  
+        <div className="overflow-x-auto bg-white shadow-md rounded-lg">
+          <table className="min-w-full text-sm text-center">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="py-4 px-6">Symbol</th>
+                <th className="py-4 px-6">Price</th>
+                <th className="py-4 px-6">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredStocks.map((stock) => (
+                <tr key={stock.symbol} className="border-t hover:bg-gray-50">
+                  <td className="py-4 px-6 font-semibold">{stock.symbol}</td>
+                  <td className="py-4 px-6">${stock.price.toFixed(2)}</td>
+                  <td className={`py-4 px-6 ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {stock.changePercent.toFixed(2)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      {/* Table */}
-      <table className="min-w-full bg-white shadow-md rounded-lg overflow-hidden">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="py-3 px-6 text-left">Symbol</th>
-            <th className="py-3 px-6 text-left">Price</th>
-            <th className="py-3 px-6 text-left">Change %</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredStocks.map((stock) => (
-            <tr key={stock.symbol} className="border-b hover:bg-gray-50">
-              <td className="py-3 px-6">{stock.symbol}</td>
-              <td className="py-3 px-6">${stock.price.toFixed(2)}</td>
-              <td className={`py-3 px-6 ${stock.changePercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {stock.changePercent.toFixed(2)}%
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
+  
+  
+  
 };
 
 export default StockTable;
