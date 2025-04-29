@@ -40,10 +40,10 @@ Deployed on **Vercel**.
 ## 📸 Screenshots
 
 ### 💻 Desktop View
-![Desktop View](path/to/desktop-screenshot.png)
+![Desktop View](/public/desktop.png)
 
 ### 📱 Mobile View
-![Mobile View](path/to/mobile-screenshot.png)
+![Mobile View](/public/mobile.png)
 
 ---
 
